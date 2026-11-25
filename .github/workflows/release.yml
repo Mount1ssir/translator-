@@ -3,7 +3,11 @@ name: Publish Android release
 on:
   push:
     tags:
-      - 'v[0-9]*'
+      - 'v*'
+    branches:
+      - main
+    paths:
+      - '.github/workflows/release.yml'
 
 permissions:
   contents: write
@@ -17,13 +21,20 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Select the version tag
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            version=$(sed -nE "s/^[[:space:]]*versionName '([^']+)'.*/\1/p" app/build.gradle)
+            tag="v$version"
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
       - name: Build and lint the Android APK
         run: |
           sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
           ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
       - name: Prepare and verify release assets
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p release
@@ -37,8 +48,11 @@ jobs:
       - name: Publish GitHub pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG is already published."
+            exit 0
+          fi
           gh release create "$RELEASE_TAG" \
             "release/WordBridge-${RELEASE_TAG}.apk" release/SHA256SUMS.txt \
             --verify-tag --prerelease --title "WordBridge $RELEASE_TAG" \
