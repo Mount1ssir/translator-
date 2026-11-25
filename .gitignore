@@ -1,1 +1,10 @@
 ai-doc/
+
+.gradle/
+**/build/
+local.properties
+.idea/
+
+.kotlin/
+*.jks
+*.keystore
